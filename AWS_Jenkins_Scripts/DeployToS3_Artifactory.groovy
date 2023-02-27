@@ -4,36 +4,28 @@ pipeline {
         node 'AwsDeployer'
     }
     parameters {
-        string(name:'TEAM_NAME', description: '[To which team do you belong too]')
-        string(name: 'APP_NAME', description: '[The name of the app you want to deploy]')
-        string(name: 'VERSION', description: '[The version you want to deploy')
-        string(name: 'BUCKET_NAME', description: '[The name of the S3 Bucket you want to push too]')
-        booleanParam(name: 'SANITY_CHECK', defaultValue: false, description: 'would you like to do a sanity check?')
+        string(name:'TEAM_NAME', description: 'To which team do you belong too]')
+        string(name: 'APP_NAME', description: 'The name of the app you want to deploy]')
+        string(name: 'VERSION', description: 'The version you want to deploy')
+        string(name: 'BUCKET_NAME', description: 'The name of the S3 Bucket you want to push too')
+        string(name: 'TMP_BUCKET', description: 'The name of the temp bucket for rollbacks')
+        booleanParam(name: 'SANITY_CHECK', description: 'would you like to do a sanity check?', defaultValue: false)
     }
     environment {
         ARTIFACTORY_ADDRESS="ARTIFACTORY ADRESS"
         ARTIFACTORY_CREDENTIALS=credentials('YOUR CREDENTIALS')
         AWS_CREDENTIALS = credentials('YOUR CREDENTIALS')
     }
-
     stages{
-        stage ('Cleaning Backup Buckets'){
+        stage ('Cleaning Backup Bucket'){
             steps{
-                sh "echo ***************************************************************************************************************"
-                sh "echo ***************************************Starting to cleann Temp Backup*****************************************************"
-                sh "aws s3 rm s3://YOUR TEMP S3 BACKUP BUCKET --recursive"
-                sh "echo ***************************************************************************************************************"
-                sh "echo ***************************************Temp Backup Has Been Cleaned****************************************************"
-
+                sh "aws s3 rm s3://${TMP_BUCKET} --recursive"
+                echo 'temp bucket as been cleaned'
             }
         }
         stage ("create a temp backup"){
             steps {
-                sh "echo ***************************************************************************************************************"
-                sh "echo ***************************************TEMP BACKUP STARTED**********************************************************"
-                sh "aws s3 sync s3://${BUCKET_NAME} s3://YOUR TEMP S3 BACKUP BUCKET"
-                sh "echo ***************************************************************************************************************"
-                sh "echo ***************************************TEMP BACKUP FINISHED*********************************************************"
+                sh "aws s3 sync s3://${BUCKET_NAME} s3://${TMP_BUCKET}"
             }
         }
         stage ("Download Artifact") {
@@ -49,12 +41,8 @@ pipeline {
                     script{
                         sh "pwd"
                         sh "tar -xvzf ${APP_NAME}.tar.gz"
-                        sh "echo ***************************************************************************************************************"
-                        sh "echo ***************************************DEPLOYMENT STARTED******************************************************"
                         sh "aws s3 rm s3://${BUCKET_NAME} --recursive"
                         sh "aws s3 cp . s3://${BUCKET_NAME} --exclude ${APP_NAME}.tar.gz --recursive"
-                        sh "echo ***************************************************************************************************************"
-                        sh "echo ***************************************DEPLOYMENT FINISHED*****************************************************"
                     }                
                 }    
             }
@@ -72,28 +60,18 @@ pipeline {
                         parameters: [
                         [$class: 'BooleanParameterDefinition', defaultValue: false, description: '', name: 'Proceed with deployment?']
                     ])
-                    sh "echo ***************************************************************************************************************"
-                    sh "echo ***************************************ROLLBACK STARTED******************************************************"
                     sh "aws s3 rm s3://${BUCKET_NAME} --recursive"
-                    sh "aws s3 sync s3://YOUR TEMP S3 BACKUP BUCKET s3://${BUCKET_NAME}"
-                    sh "aws s3 rm s3://YOUR TEMP S3 BACKUP BUCKET --recursive"
-                    sh "echo ***************************************************************************************************************"
-                    sh "echo ***************************************ROLLBACK FINISHED*******************************************************"
-                    sh "echo *******************************This Pipeline was made by Michael***********************************************"
+                    sh "aws s3 sync s3://${TMP_BUCKET} s3://${BUCKET_NAME}"
+                    sh "aws s3 rm s3://${TMP_BUCKET} --recursive"
                 }
             }
         }
     }
     post {
         failure {
-            sh "echo ***************************************************************************************************************"
-            sh "echo ***************************************ROLLBACK STARTED******************************************************"
             sh "aws s3 rm s3://${BUCKET_NAME} --recursive"
-            sh "aws s3 sync s3://YOUR TEMP S3 BACKUP BUCKET s3://${BUCKET_NAME}"
-            sh "aws s3 rm s3://YOUR TEMP S3 BACKUP BUCKET --recursive"
-            sh "echo ***************************************************************************************************************"
-            sh "echo ***************************************ROLLBACK FINISHED*******************************************************"
-            sh "echo *******************************This Pipeline was made by Michael***********************************************"
+            sh "aws s3 sync s3://${TMP_BUCKET}s3://${BUCKET_NAME}"
+            sh "aws s3 rm s3://${TMP_BUCKET} --recursive"
         }
     }
 }

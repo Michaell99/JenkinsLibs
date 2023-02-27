@@ -17,8 +17,8 @@ pipeline {
     stages {
         stage ('Fetching artifacts'){
             steps {
-                sh "curl --insecure ${ARTIFACT_URI} --output ${TAR_NAME}"
-                sh "tar -xvf ${TAR_NAME}"
+                sh "curl --insecure ${ARTIFACT_URI} --output ${TAR_NAME}.tar.gz"
+                sh "tar -xvf ${TAR_NAME}tar.gz"
             }
         }
         stage ('Build Image') {
